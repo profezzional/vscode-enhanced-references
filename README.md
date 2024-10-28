@@ -1,34 +1,34 @@
-# References View
+# Enhanced References
 
-This extension shows reference search results as separate view, just like search results. It complements the peek view presentation that is also built into VS Code. The following feature are available:
+## The Repository
 
-* List All References via the Command Palette, the Context Menu, or via <kbd>Alt+Shift+F12</kbd>
-* View references in a dedicated tree view that sits in the sidebar
-* Navigate through search results via <kbd>F4</kbd> and  <kbd>Shift+F4</kbd>
-* Remove references from the list via inline commands
-
-![](https://raw.githubusercontent.com/microsoft/vscode-references-view/master/media/demo.png)
-
-**Note** that this extension is bundled with Visual Studio Code version 1.29 and later - it doesn't need to be installed anymore.
+This VS Code extension is "forked" from the bundled [References View](https://github.com/microsoft/vscode/tree/main/extensions/enhanced-references) extension, to add new features and functionality to the References panel.
 
 ## Requirements
 
-This extension is just an alternative UI for reference search and extensions implementing reference search must still be installed.
+This extension is intended to replace the existing References View extension (since this one is a superset of features and since the shortcuts overlap), so to avoid conflicts, it will prompt you to disable one before activating this one.
 
-## Issues
+## The Extension
 
-This extension ships with Visual Studio Code and uses its issue tracker. Please file issue here: https://github.com/Microsoft/vscode/issues
+This extension shows reference search results as separate view, just like search results. It complements the peek view presentation that is also built into VS Code. The following features are available:
 
-# Contributing
+- List all references (or assignments) via the Command Palette, the Context Menu, or via keyboard shortcuts:
+  | Command | Default Keyboard Shortcut |
+  | --- | --- |
+  | Find All References | <kbd>Shift+Alt+F12</kbd> |
+  | Find All Assignments | <kbd>Shift+Alt+F11</kbd> |
+  | Go To References | <kbd>Shift+F12</kbd> |
+  | Go To Assignments | <kbd>Shift+F11</kbd> |
+- View references in a dedicated tree view that sits in the sidebar:
+  - Filter to assignments
+  - Switch between list and tree views
+- Navigate through search results via <kbd>F4</kbd> and <kbd>Shift+F4</kbd>
+- Remove references from the list via inline commands
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.microsoft.com.
+## Development
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+This repo uses [pnpm](https://pnpm.io/) for package management, [prettier](https://prettier.io/) for code formatting, and [typescript-eslint](https://typescript-eslint.io/) for code styling.
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+## Issues/Contributing
+
+Bug reports, feature suggestions/requests, and pull requests are welcome, though for any pull requests, please try to review the style of the existing code and try to match that. I may make updates to PRs or make new branches on top of PRs to help them match the styling (beyond just Prettier, to include naming, types specification, code layout, etc.), while still crediting the PR creator.

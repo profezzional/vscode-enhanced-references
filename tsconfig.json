@@ -1,10 +1,15 @@
 {
-	"extends": "../tsconfig.base.json",
-	"compilerOptions": {
-		"outDir": "./out",
-	},
-	"include": [
-		"src/**/*",
-		"../../src/vscode-dts/vscode.d.ts"
-	]
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ESNext",
+    "outDir": "./out",
+    "lib": ["ESNext"],
+    "sourceMap": true,
+    "inlineSources": true,
+    "rootDir": "src",
+    "strict": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
 }
