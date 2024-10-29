@@ -7,13 +7,89 @@ import {
   ReferencesTreeInput,
 } from "./model";
 
-export function register(
-  tree: SymbolsTree,
+const PREFERRED_LOCATION_CONFIG: string =
+  "enhanced-references.preferredLocation";
+
+const registerShowReferencesCommand = (
+  symbolsTree: SymbolsTree<FileItem | ReferenceItem>,
+): vscode.Disposable => {
+  const showReferencesDisposable: vscode.Disposable =
+    vscode.commands.registerCommand(
+      "editor.action.showReferences",
+      async (
+        uri: vscode.Uri,
+        position: vscode.Position,
+        locations: vscode.Location[],
+      ): Promise<void> => {
+        const input: ReferencesTreeInput = new ReferencesTreeInput(
+          vscode.l10n.t("References"),
+          new vscode.Location(uri, position),
+          "vscode.executeReferenceProvider",
+          locations,
+        );
+
+        symbolsTree.setInput(input);
+      },
+    );
+
+  return showReferencesDisposable;
+};
+
+const handleShowReferencesCommandSubscription = (
+  symbolsTree: SymbolsTree<FileItem | ReferenceItem>,
   context: vscode.ExtensionContext,
-): void {
-  function findLocations(title: string, command: string) {
+): void => {
+  let showReferencesDisposable: vscode.Disposable | undefined;
+
+  const updateShowReferences = (
+    event: vscode.ConfigurationChangeEvent | undefined,
+    showReferencesDisposable: vscode.Disposable | undefined,
+  ): vscode.Disposable | undefined => {
+    if (event && !event.affectsConfiguration(PREFERRED_LOCATION_CONFIG)) {
+      return undefined;
+    }
+
+    const value: string | undefined = vscode.workspace
+      .getConfiguration()
+      .get<string>(PREFERRED_LOCATION_CONFIG);
+
+    showReferencesDisposable?.dispose();
+    showReferencesDisposable = undefined;
+
+    if (value !== "view") {
+      return undefined;
+    }
+
+    showReferencesDisposable = registerShowReferencesCommand(symbolsTree);
+
+    return showReferencesDisposable;
+  };
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(
+      (event: vscode.ConfigurationChangeEvent): void => {
+        showReferencesDisposable =
+          updateShowReferences(event, showReferencesDisposable) ||
+          showReferencesDisposable;
+      },
+    ),
+  );
+  context.subscriptions.push({
+    dispose: (): void => {
+      showReferencesDisposable?.dispose();
+    },
+  });
+
+  updateShowReferences(undefined, showReferencesDisposable);
+};
+
+export const registerCommands = (
+  symbolsTree: SymbolsTree<FileItem | ReferenceItem>,
+  context: vscode.ExtensionContext,
+): void => {
+  const findLocations = (title: string, command: string): void => {
     if (vscode.window.activeTextEditor) {
-      const input = new ReferencesTreeInput(
+      const input: ReferencesTreeInput = new ReferencesTreeInput(
         title,
         new vscode.Location(
           vscode.window.activeTextEditor.document.uri,
@@ -21,88 +97,66 @@ export function register(
         ),
         command,
       );
-      tree.setInput(input);
+
+      symbolsTree.setInput(input);
     }
-  }
+  };
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("enhanced-references.findReferences", () =>
-      findLocations("References", "vscode.executeReferenceProvider"),
+    vscode.commands.registerCommand(
+      "enhanced-references.findReferences",
+      (): void => {
+        findLocations("References", "vscode.executeReferenceProvider");
+      },
     ),
     vscode.commands.registerCommand(
       "enhanced-references.findImplementations",
-      () =>
+      (): void => {
         findLocations(
           "Implementations",
           "vscode.executeImplementationProvider",
-        ),
+        );
+      },
     ),
-    // --- legacy name
     vscode.commands.registerCommand(
       "enhanced-references.find",
-      (...args: any[]) =>
+      (...args: any[]): void => {
         vscode.commands.executeCommand(
           "enhanced-references.findReferences",
           ...args,
-        ),
+        );
+      },
     ),
     vscode.commands.registerCommand(
       "enhanced-references.removeReferenceItem",
-      removeReferenceItem,
+      (item: FileItem | ReferenceItem): void => {
+        removeReferenceItem(item);
+      },
     ),
-    vscode.commands.registerCommand("enhanced-references.copy", copyCommand),
+    vscode.commands.registerCommand(
+      "enhanced-references.copy",
+      (item: ReferencesModel | ReferenceItem | FileItem): void => {
+        copyCommand(item);
+      },
+    ),
     vscode.commands.registerCommand(
       "enhanced-references.copyAll",
-      copyAllCommand,
+      (item: ReferenceItem | FileItem): void => {
+        copyAllCommand(item);
+      },
     ),
     vscode.commands.registerCommand(
       "enhanced-references.copyPath",
-      copyPathCommand,
+      (item: FileItem): void => {
+        copyPathCommand(item);
+      },
     ),
   );
 
-  // --- enhanced-references.preferredLocation setting
+  handleShowReferencesCommandSubscription(symbolsTree, context);
+};
 
-  let showReferencesDisposable: vscode.Disposable | undefined;
-  const config = "enhanced-references.preferredLocation";
-  function updateShowReferences(event?: vscode.ConfigurationChangeEvent) {
-    if (event && !event.affectsConfiguration(config)) {
-      return;
-    }
-    const value = vscode.workspace.getConfiguration().get<string>(config);
-
-    showReferencesDisposable?.dispose();
-    showReferencesDisposable = undefined;
-
-    if (value === "view") {
-      showReferencesDisposable = vscode.commands.registerCommand(
-        "editor.action.showReferences",
-        async (
-          uri: vscode.Uri,
-          position: vscode.Position,
-          locations: vscode.Location[],
-        ) => {
-          const input = new ReferencesTreeInput(
-            vscode.l10n.t("References"),
-            new vscode.Location(uri, position),
-            "vscode.executeReferenceProvider",
-            locations,
-          );
-          tree.setInput(input);
-        },
-      );
-    }
-  }
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(updateShowReferences),
-  );
-  context.subscriptions.push({
-    dispose: () => showReferencesDisposable?.dispose(),
-  });
-  updateShowReferences();
-}
-
-const copyAllCommand = async (item: ReferenceItem | FileItem | unknown) => {
+const copyAllCommand = async (item: ReferenceItem | FileItem) => {
   if (item instanceof ReferenceItem) {
     copyCommand(item.file.model);
   } else if (item instanceof FileItem) {
@@ -110,36 +164,40 @@ const copyAllCommand = async (item: ReferenceItem | FileItem | unknown) => {
   }
 };
 
-function removeReferenceItem(item: FileItem | ReferenceItem | unknown) {
+const removeReferenceItem = (item: FileItem | ReferenceItem): void => {
   if (item instanceof FileItem) {
     item.remove();
   } else if (item instanceof ReferenceItem) {
     item.remove();
   }
-}
+};
 
-async function copyCommand(
-  item: ReferencesModel | ReferenceItem | FileItem | unknown,
-) {
-  let val: string | undefined;
+const copyCommand = async (
+  item: ReferencesModel | ReferenceItem | FileItem,
+): Promise<void> => {
+  let itemValue: string | undefined;
+
   if (item instanceof ReferencesModel) {
-    val = await item.asCopyText();
+    itemValue = await item.asCopyText();
   } else if (item instanceof ReferenceItem) {
-    val = await item.asCopyText();
+    itemValue = await item.asCopyText();
   } else if (item instanceof FileItem) {
-    val = await item.asCopyText();
+    itemValue = await item.asCopyText();
   }
-  if (val) {
-    await vscode.env.clipboard.writeText(val);
-  }
-}
 
-async function copyPathCommand(item: FileItem | unknown) {
-  if (item instanceof FileItem) {
-    if (item.uri.scheme === "file") {
-      vscode.env.clipboard.writeText(item.uri.fsPath);
-    } else {
-      vscode.env.clipboard.writeText(item.uri.toString(true));
-    }
+  if (itemValue) {
+    await vscode.env.clipboard.writeText(itemValue);
   }
-}
+};
+
+const copyPathCommand = (item: FileItem): void => {
+  if (!(item instanceof FileItem)) {
+    return;
+  }
+
+  if (item.uri.scheme === "file") {
+    vscode.env.clipboard.writeText(item.uri.fsPath);
+  } else {
+    vscode.env.clipboard.writeText(item.uri.toString(true));
+  }
+};

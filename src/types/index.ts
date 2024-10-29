@@ -1,38 +1,43 @@
 import * as vscode from "vscode";
+import { SymbolsTreeInput } from "../enhanced-references";
 import { SymbolsTree } from "../tree";
 import { ContextKey } from "../utils";
 import { TypeHierarchyDirection, TypeItem, TypesTreeInput } from "./model";
 
-export function register(
-  tree: SymbolsTree,
+export const register = <T>(
+  tree: SymbolsTree<T>,
   context: vscode.ExtensionContext,
-): void {
-  const direction = new RichTypesDirection(
+): void => {
+  const direction: RichTypesDirection = new RichTypesDirection(
     context.workspaceState,
     TypeHierarchyDirection.Subtypes,
   );
 
-  function showTypeHierarchy() {
-    if (vscode.window.activeTextEditor) {
-      const input = new TypesTreeInput(
-        new vscode.Location(
-          vscode.window.activeTextEditor.document.uri,
-          vscode.window.activeTextEditor.selection.active,
-        ),
-        direction.value,
-      );
-      tree.setInput(input);
+  const showTypeHierarchy = (): void => {
+    if (!vscode.window.activeTextEditor) {
+      return;
     }
-  }
 
-  function setTypeHierarchyDirection(
+    const input: TypesTreeInput = new TypesTreeInput(
+      new vscode.Location(
+        vscode.window.activeTextEditor.document.uri,
+        vscode.window.activeTextEditor.selection.active,
+      ),
+      direction.value,
+    );
+
+    tree.setInput(input);
+  };
+
+  const setTypeHierarchyDirection = <T>(
     value: TypeHierarchyDirection,
     anchor: TypeItem | vscode.Location | unknown,
-  ) {
+  ): void => {
     direction.value = value;
 
     let newInput: TypesTreeInput | undefined;
-    const oldInput = tree.getInput();
+    const oldInput: SymbolsTreeInput<T> | undefined = tree.getInput();
+
     if (anchor instanceof TypeItem) {
       newInput = new TypesTreeInput(
         new vscode.Location(anchor.item.uri, anchor.item.selectionRange.start),
@@ -43,10 +48,11 @@ export function register(
     } else if (oldInput instanceof TypesTreeInput) {
       newInput = new TypesTreeInput(oldInput.location, direction.value);
     }
+
     if (newInput) {
       tree.setInput(newInput);
     }
-  }
+  };
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -68,40 +74,42 @@ export function register(
       removeTypeItem,
     ),
   );
-}
+};
 
-function removeTypeItem(item: TypeItem | unknown): void {
+const removeTypeItem = (item: TypeItem | unknown): void => {
   if (item instanceof TypeItem) {
     item.remove();
   }
-}
+};
 
 class RichTypesDirection {
-  private static _key = "enhanced-references.typeHierarchyMode";
+  private static key: string = "enhanced-references.typeHierarchyMode";
 
-  private _ctxMode = new ContextKey<TypeHierarchyDirection>(
+  private typeHierarchyMode = new ContextKey<TypeHierarchyDirection>(
     "enhanced-references.typeHierarchyMode",
   );
 
-  constructor(
-    private _mem: vscode.Memento,
-    private _value: TypeHierarchyDirection = TypeHierarchyDirection.Subtypes,
+  public constructor(
+    private memento: vscode.Memento,
+    private typeHierarchyDirection: TypeHierarchyDirection = TypeHierarchyDirection.Subtypes,
   ) {
-    const raw = _mem.get<TypeHierarchyDirection>(RichTypesDirection._key);
-    if (typeof raw === "string") {
-      this.value = raw;
+    const rawTypeHierarchyDirectionValue: TypeHierarchyDirection | undefined =
+      memento.get<TypeHierarchyDirection>(RichTypesDirection.key);
+
+    if (typeof rawTypeHierarchyDirectionValue === "string") {
+      this.value = rawTypeHierarchyDirectionValue;
     } else {
-      this.value = _value;
+      this.value = typeHierarchyDirection;
     }
   }
 
-  get value() {
-    return this._value;
+  public get value(): TypeHierarchyDirection {
+    return this.typeHierarchyDirection;
   }
 
-  set value(value: TypeHierarchyDirection) {
-    this._value = value;
-    this._ctxMode.set(value);
-    this._mem.update(RichTypesDirection._key, value);
+  public set value(value: TypeHierarchyDirection) {
+    this.typeHierarchyDirection = value;
+    this.typeHierarchyMode.set(value);
+    this.memento.update(RichTypesDirection.key, value);
   }
 }

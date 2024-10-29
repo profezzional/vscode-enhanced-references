@@ -74,6 +74,14 @@
         "category": "%cmd.category.references%"
       },
       {
+        "command": "enhanced-references.findAssignments",
+        "title": "Find All Assignments"
+      },
+      {
+        "command": "enhanced-references.goToAssignments",
+        "title": "Go To Assignments"
+      },
+      {
         "command": "enhanced-references.findImplementations",
         "title": "%cmd.enhanced-references.findImplementations%",
         "category": "%cmd.category.references%"
@@ -181,9 +189,19 @@
     "menus": {
       "editor/context": [
         {
+          "command": "enhanced-references.goToAssignments",
+          "when": "editorHasReferenceProvider",
+          "group": "navigation@6"
+        },
+        {
           "command": "enhanced-references.findReferences",
           "when": "editorHasReferenceProvider",
           "group": "0_navigation@1"
+        },
+        {
+          "command": "enhanced-references.findAssignments",
+          "when": "editorHasReferenceProvider",
+          "group": "0_navigation@2"
         },
         {
           "command": "enhanced-references.findImplementations",
@@ -349,6 +367,14 @@
           "when": "editorHasReferenceProvider"
         },
         {
+          "command": "enhanced-references.findAssignments",
+          "when": "editorHasReferenceProvider"
+        },
+        {
+          "command": "enhanced-references.goToAssignments",
+          "when": "editorHasReferenceProvider"
+        },
+        {
           "command": "enhanced-references.clear",
           "when": "reference-list.hasResult"
         },
@@ -379,6 +405,16 @@
         "command": "enhanced-references.findReferences",
         "when": "editorHasReferenceProvider",
         "key": "shift+alt+f12"
+      },
+      {
+        "command": "enhanced-references.findAssignments",
+        "when": "editorHasReferenceProvider",
+        "key": "shift+alt+f11"
+      },
+      {
+        "command": "enhanced-references.goToAssignments",
+        "when": "editorHasReferenceProvider",
+        "key": "shift+f11"
       },
       {
         "command": "enhanced-references.next",

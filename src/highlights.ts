@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { SymbolItemEditorHighlights } from "./enhanced-references";
 
 export class EditorHighlights<T> {
-  private readonly _decorationType =
+  private readonly decorationType =
     vscode.window.createTextEditorDecorationType({
       backgroundColor: new vscode.ThemeColor(
         "editor.findMatchHighlightBackground",
@@ -15,67 +15,81 @@ export class EditorHighlights<T> {
     });
 
   private readonly disposables: vscode.Disposable[] = [];
-  private readonly _ignore = new Set<string>();
+  private readonly ignore: Set<string> = new Set<string>();
 
-  constructor(
-    private readonly _view: vscode.TreeView<T>,
-    private readonly _delegate: SymbolItemEditorHighlights<T>,
+  public constructor(
+    private readonly view: vscode.TreeView<T>,
+    private readonly delegate: SymbolItemEditorHighlights<T>,
   ) {
     this.disposables.push(
-      vscode.workspace.onDidChangeTextDocument((e) =>
-        this._ignore.add(e.document.uri.toString()),
+      vscode.workspace.onDidChangeTextDocument(
+        (event: vscode.TextDocumentChangeEvent): void => {
+          this.ignore.add(event.document.uri.toString());
+        },
       ),
-      vscode.window.onDidChangeActiveTextEditor(
-        () => _view.visible && this.update(),
+      vscode.window.onDidChangeActiveTextEditor((): void => {
+        if (view.visible) {
+          this.update();
+        }
+      }),
+      view.onDidChangeVisibility(
+        (event: vscode.TreeViewVisibilityChangeEvent): void => {
+          if (event.visible) {
+            this.show();
+          } else {
+            this.hide();
+          }
+        },
       ),
-      _view.onDidChangeVisibility((e) =>
-        e.visible ? this._show() : this._hide(),
-      ),
-      _view.onDidChangeSelection(() => {
-        if (_view.visible) {
+      view.onDidChangeSelection((): void => {
+        if (view.visible) {
           this.update();
         }
       }),
     );
-    this._show();
+    this.show();
   }
 
-  dispose() {
+  public dispose(): void {
     vscode.Disposable.from(...this.disposables).dispose();
+
     for (const editor of vscode.window.visibleTextEditors) {
-      editor.setDecorations(this._decorationType, []);
+      editor.setDecorations(this.decorationType, []);
     }
   }
 
-  private _show(): void {
+  private show(): void {
     const { activeTextEditor: editor } = vscode.window;
+
     if (!editor || !editor.viewColumn) {
       return;
     }
-    if (this._ignore.has(editor.document.uri.toString())) {
+    if (this.ignore.has(editor.document.uri.toString())) {
       return;
     }
-    const [anchor] = this._view.selection;
+
+    const [anchor] = this.view.selection;
+
     if (!anchor) {
       return;
     }
-    const ranges = this._delegate.getEditorHighlights(
-      anchor,
-      editor.document.uri,
-    );
+
+    const ranges: vscode.Range[] | undefined =
+      this.delegate.getEditorHighlights(anchor, editor.document.uri);
+
     if (ranges) {
-      editor.setDecorations(this._decorationType, ranges);
+      editor.setDecorations(this.decorationType, ranges);
     }
   }
 
-  private _hide(): void {
+  private hide(): void {
     for (const editor of vscode.window.visibleTextEditors) {
-      editor.setDecorations(this._decorationType, []);
+      editor.setDecorations(this.decorationType, []);
     }
   }
 
-  update(): void {
-    this._hide();
-    this._show();
+  public update(): void {
+    this.hide();
+    this.show();
   }
 }

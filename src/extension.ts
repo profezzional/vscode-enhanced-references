@@ -1,24 +1,30 @@
 import * as vscode from "vscode";
 import * as calls from "./calls";
-import { SymbolTree, SymbolTreeInput } from "./enhanced-references";
+import { SymbolsTree, SymbolsTreeInput } from "./enhanced-references";
 import * as references from "./references";
-import { SymbolsTree } from "./tree";
+import { FileItem, ReferenceItem } from "./references/model";
 import * as types from "./types";
 
-export function activate(context: vscode.ExtensionContext): SymbolTree {
-  const tree = new SymbolsTree();
+export const activate = (context: vscode.ExtensionContext): SymbolsTree => {
+  const tree: SymbolsTree<FileItem | ReferenceItem> = new SymbolsTree<
+    FileItem | ReferenceItem
+  >();
 
-  references.register(tree, context);
+  references.registerCommands(tree, context);
   calls.register(tree, context);
   types.register(tree, context);
 
-  function setInput(input: SymbolTreeInput<unknown>) {
+  const setInput = (
+    input: SymbolsTreeInput<FileItem | ReferenceItem>,
+  ): void => {
     tree.setInput(input);
-  }
+  };
 
-  function getInput(): SymbolTreeInput<unknown> | undefined {
+  const getInput = ():
+    | SymbolsTreeInput<FileItem | ReferenceItem>
+    | undefined => {
     return tree.getInput();
-  }
+  };
 
   return { setInput, getInput };
-}
+};

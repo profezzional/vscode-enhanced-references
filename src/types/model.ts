@@ -3,17 +3,18 @@ import {
   SymbolItemDragAndDrop,
   SymbolItemEditorHighlights,
   SymbolItemNavigation,
-  SymbolTreeInput,
+  SymbolsTreeInput,
+  SymbolsTreeModel,
 } from "../enhanced-references";
-import { asResourceUrl, del, getThemeIcon, tail } from "../utils";
+import { asResourceUrl, deleteFromArray, getThemeIcon, tail } from "../utils";
 
-export class TypesTreeInput implements SymbolTreeInput<TypeItem> {
-  readonly title: string;
-  readonly contextValue: string = "typeHierarchy";
+export class TypesTreeInput implements SymbolsTreeInput<TypeItem> {
+  public readonly title: string;
+  public readonly contextValue: string = "typeHierarchy";
 
-  constructor(
-    readonly location: vscode.Location,
-    readonly direction: TypeHierarchyDirection,
+  public constructor(
+    public readonly location: vscode.Location,
+    private readonly direction: TypeHierarchyDirection,
   ) {
     this.title =
       direction === TypeHierarchyDirection.Supertypes
@@ -21,7 +22,9 @@ export class TypesTreeInput implements SymbolTreeInput<TypeItem> {
         : vscode.l10n.t("Subtypes Of");
   }
 
-  async resolve() {
+  public async resolve(): Promise<
+    vscode.ProviderResult<SymbolsTreeModel<TypesModel>>
+  > {
     const items = await Promise.resolve(
       vscode.commands.executeCommand<vscode.TypeHierarchyItem[]>(
         "vscode.prepareTypeHierarchy",
@@ -29,8 +32,8 @@ export class TypesTreeInput implements SymbolTreeInput<TypeItem> {
         this.location.range.start,
       ),
     );
-    const model = new TypesModel(this.direction, items ?? []);
-    const provider = new TypeItemDataProvider(model);
+    const model: TypesModel = new TypesModel(this.direction, items ?? []);
+    const provider: TypeItemDataProvider = new TypeItemDataProvider(model);
 
     if (model.roots.length === 0) {
       return;
@@ -38,7 +41,7 @@ export class TypesTreeInput implements SymbolTreeInput<TypeItem> {
 
     return {
       provider,
-      get message() {
+      get message(): string | undefined {
         return model.roots.length === 0
           ? vscode.l10n.t("No results.")
           : undefined;
@@ -52,8 +55,13 @@ export class TypesTreeInput implements SymbolTreeInput<TypeItem> {
     };
   }
 
-  with(location: vscode.Location): TypesTreeInput {
-    return new TypesTreeInput(location, this.direction);
+  public with(location: vscode.Location): TypesTreeInput {
+    const typesTreeInput: TypesTreeInput = new TypesTreeInput(
+      location,
+      this.direction,
+    );
+
+    return typesTreeInput;
   }
 }
 
@@ -65,13 +73,13 @@ export const enum TypeHierarchyDirection {
 export class TypeItem {
   children?: TypeItem[];
 
-  constructor(
-    readonly model: TypesModel,
-    readonly item: vscode.TypeHierarchyItem,
-    readonly parent: TypeItem | undefined,
+  public constructor(
+    private readonly model: TypesModel,
+    public readonly item: vscode.TypeHierarchyItem,
+    public readonly parent: TypeItem | undefined,
   ) {}
 
-  remove(): void {
+  public remove(): void {
     this.model.remove(this);
   }
 }
@@ -82,89 +90,101 @@ class TypesModel
     SymbolItemEditorHighlights<TypeItem>,
     SymbolItemDragAndDrop<TypeItem>
 {
-  readonly roots: TypeItem[] = [];
+  public readonly roots: TypeItem[] = [];
+  public readonly onDidChange: vscode.EventEmitter<TypesModel> =
+    new vscode.EventEmitter<TypesModel>();
 
-  private readonly _onDidChange = new vscode.EventEmitter<TypesModel>();
-  readonly onDidChange = this._onDidChange.event;
-
-  constructor(
-    readonly direction: TypeHierarchyDirection,
+  public constructor(
+    private readonly typeHierarchyDirection: TypeHierarchyDirection,
     items: vscode.TypeHierarchyItem[],
   ) {
     this.roots = items.map((item) => new TypeItem(this, item, undefined));
   }
 
-  private async _resolveTypes(currentType: TypeItem): Promise<TypeItem[]> {
-    if (this.direction === TypeHierarchyDirection.Supertypes) {
-      const types = await vscode.commands.executeCommand<
-        vscode.TypeHierarchyItem[]
-      >("vscode.provideSupertypes", currentType.item);
-      return types
-        ? types.map((item) => new TypeItem(this, item, currentType))
-        : [];
-    } else {
-      const types = await vscode.commands.executeCommand<
-        vscode.TypeHierarchyItem[]
-      >("vscode.provideSubtypes", currentType.item);
-      return types
-        ? types.map((item) => new TypeItem(this, item, currentType))
-        : [];
-    }
+  private async resolveTypes(currentType: TypeItem): Promise<TypeItem[]> {
+    const types: vscode.TypeHierarchyItem[] =
+      await vscode.commands.executeCommand(
+        this.typeHierarchyDirection === TypeHierarchyDirection.Supertypes
+          ? "vscode.provideSupertypes"
+          : "vscode.provideSubtypes",
+        currentType.item,
+      );
+
+    return types
+      ? types.map((item: vscode.TypeHierarchyItem): TypeItem => {
+          const typeItem: TypeItem = new TypeItem(this, item, currentType);
+
+          return typeItem;
+        })
+      : [];
   }
 
-  async getTypeChildren(item: TypeItem): Promise<TypeItem[]> {
+  public async getTypeChildren(item: TypeItem): Promise<TypeItem[]> {
     if (!item.children) {
-      item.children = await this._resolveTypes(item);
+      item.children = await this.resolveTypes(item);
     }
+
     return item.children;
   }
 
-  // -- dnd
-
-  getDragUri(item: TypeItem): vscode.Uri | undefined {
-    return asResourceUrl(item.item.uri, item.item.range);
-  }
-
-  // -- navigation
-
-  location(currentType: TypeItem) {
-    return new vscode.Location(currentType.item.uri, currentType.item.range);
-  }
-
-  nearest(uri: vscode.Uri, _position: vscode.Position): TypeItem | undefined {
-    return (
-      this.roots.find((item) => item.item.uri.toString() === uri.toString()) ??
-      this.roots[0]
+  public getDragURI(item: TypeItem): vscode.Uri | undefined {
+    const dragAndDropURI: vscode.Uri = asResourceUrl(
+      item.item.uri,
+      item.item.range,
     );
+
+    return dragAndDropURI;
   }
 
-  next(from: TypeItem): TypeItem {
-    return this._move(from, true) ?? from;
+  public location(currentType: TypeItem): vscode.Location {
+    const location: vscode.Location = new vscode.Location(
+      currentType.item.uri,
+      currentType.item.range,
+    );
+
+    return location;
   }
 
-  previous(from: TypeItem): TypeItem {
-    return this._move(from, false) ?? from;
+  public nearest(
+    uri: vscode.Uri,
+    position: vscode.Position,
+  ): TypeItem | undefined {
+    const nearest: TypeItem | undefined =
+      this.roots.find((item: TypeItem): boolean => {
+        return item.item.uri.toString() === uri.toString();
+      }) || this.roots[0];
+
+    return nearest;
   }
 
-  private _move(item: TypeItem, fwd: boolean): TypeItem | undefined {
+  public next(from: TypeItem): TypeItem {
+    return this.move(from, true) ?? from;
+  }
+
+  public previous(from: TypeItem): TypeItem {
+    return this.move(from, false) ?? from;
+  }
+
+  private move(item: TypeItem, forward: boolean): TypeItem | undefined {
     if (item.children?.length) {
-      return fwd ? item.children[0] : tail(item.children);
+      return forward ? item.children[0] : tail(item.children);
     }
-    const array = this.roots.includes(item)
+
+    const items: TypeItem[] | undefined = this.roots.includes(item)
       ? this.roots
       : item.parent?.children;
-    if (array?.length) {
-      const idx = array.indexOf(item);
-      const delta = fwd ? 1 : -1;
-      return array[idx + delta + (array.length % array.length)];
+
+    if (items?.length) {
+      const itemIndex: number = items.indexOf(item);
+      const delta: number = forward ? 1 : -1;
+
+      return items[itemIndex + delta + (items.length % items.length)];
     }
 
     return undefined; // TODO: handle this case better
   }
 
-  // --- highlights
-
-  getEditorHighlights(
+  public getEditorHighlights(
     currentType: TypeItem,
     uri: vscode.Uri,
   ): vscode.Range[] | undefined {
@@ -173,38 +193,44 @@ class TypesModel
       : undefined;
   }
 
-  remove(item: TypeItem) {
-    const isInRoot = this.roots.includes(item);
-    const siblings = isInRoot ? this.roots : item.parent?.children;
+  public remove(item: TypeItem): void {
+    const isInRoot: boolean = this.roots.includes(item);
+    const siblings: TypeItem[] | undefined = isInRoot
+      ? this.roots
+      : item.parent?.children;
+
     if (siblings) {
-      del(siblings, item);
-      this._onDidChange.fire(this);
+      deleteFromArray(siblings, item);
+      this.onDidChange.fire(this);
     }
   }
 }
 
 class TypeItemDataProvider implements vscode.TreeDataProvider<TypeItem> {
-  private readonly _emitter = new vscode.EventEmitter<TypeItem | undefined>();
-  readonly onDidChangeTreeData = this._emitter.event;
+  private readonly emitter = new vscode.EventEmitter<TypeItem | undefined>();
+  private readonly modelListener: vscode.Disposable;
 
-  private readonly _modelListener: vscode.Disposable;
+  public readonly onDidChangeTreeData: vscode.Event<TypeItem | undefined> =
+    this.emitter.event;
 
-  constructor(private _model: TypesModel) {
-    this._modelListener = _model.onDidChange((e) =>
-      this._emitter.fire(e instanceof TypeItem ? e : undefined),
-    );
+  public constructor(private model: TypesModel) {
+    this.modelListener = model.onDidChange.event((event: TypesModel): void => {
+      this.emitter.fire(event instanceof TypeItem ? event : undefined);
+    });
   }
 
-  dispose(): void {
-    this._emitter.dispose();
-    this._modelListener.dispose();
+  public dispose(): void {
+    this.emitter.dispose();
+    this.modelListener.dispose();
   }
 
-  getTreeItem(element: TypeItem): vscode.TreeItem {
-    const item = new vscode.TreeItem(element.item.name);
+  public getTreeItem(element: TypeItem): vscode.TreeItem {
+    const item: vscode.TreeItem = new vscode.TreeItem(element.item.name);
+
     item.description = element.item.detail;
     item.contextValue = "type-item";
     item.iconPath = getThemeIcon(element.item.kind);
+    item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
     item.command = {
       command: "vscode.open",
       title: vscode.l10n.t("Open Type"),
@@ -217,15 +243,17 @@ class TypeItemDataProvider implements vscode.TreeDataProvider<TypeItem> {
         } satisfies vscode.TextDocumentShowOptions,
       ],
     };
-    item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+
     return item;
   }
 
-  getChildren(element?: TypeItem | undefined) {
-    return element ? this._model.getTypeChildren(element) : this._model.roots;
+  public async getChildren(
+    element?: TypeItem | undefined,
+  ): Promise<TypeItem[]> {
+    return element ? this.model.getTypeChildren(element) : this.model.roots;
   }
 
-  getParent(element: TypeItem) {
+  public getParent(element: TypeItem): TypeItem | undefined {
     return element.parent;
   }
 }

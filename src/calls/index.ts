@@ -1,38 +1,49 @@
 import * as vscode from "vscode";
+import { SymbolsTreeInput } from "../enhanced-references";
 import { SymbolsTree } from "../tree";
 import { ContextKey } from "../utils";
 import { CallItem, CallsDirection, CallsTreeInput } from "./model";
 
-export function register(
-  tree: SymbolsTree,
+export const register = <T>(
+  tree: SymbolsTree<T>,
   context: vscode.ExtensionContext,
-): void {
-  const direction = new RichCallsDirection(
+): void => {
+  const direction: RichCallsDirection = new RichCallsDirection(
     context.workspaceState,
     CallsDirection.Incoming,
   );
 
-  function showCallHierarchy() {
-    if (vscode.window.activeTextEditor) {
-      const input = new CallsTreeInput(
-        new vscode.Location(
-          vscode.window.activeTextEditor.document.uri,
-          vscode.window.activeTextEditor.selection.active,
-        ),
-        direction.value,
-      );
-      tree.setInput(input);
+  const showCallHierarchy = (): void => {
+    if (!vscode.window.activeTextEditor) {
+      return;
     }
-  }
 
-  function setCallsDirection(
+    const input: CallsTreeInput = new CallsTreeInput(
+      new vscode.Location(
+        vscode.window.activeTextEditor.document.uri,
+        vscode.window.activeTextEditor.selection.active,
+      ),
+      direction.value,
+    );
+
+    tree.setInput(input);
+  };
+
+  const removeCallItem = (item: CallItem | unknown): void => {
+    if (item instanceof CallItem) {
+      item.remove();
+    }
+  };
+
+  const setCallsDirection = (
     value: CallsDirection,
     anchor: CallItem | unknown,
-  ) {
+  ): void => {
     direction.value = value;
 
     let newInput: CallsTreeInput | undefined;
-    const oldInput = tree.getInput();
+    const oldInput: SymbolsTreeInput<T> | undefined = tree.getInput();
+
     if (anchor instanceof CallItem) {
       newInput = new CallsTreeInput(
         new vscode.Location(anchor.item.uri, anchor.item.selectionRange.start),
@@ -41,67 +52,77 @@ export function register(
     } else if (oldInput instanceof CallsTreeInput) {
       newInput = new CallsTreeInput(oldInput.location, direction.value);
     }
+
     if (newInput) {
       tree.setInput(newInput);
     }
-  }
+  };
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "enhanced-references.showCallHierarchy",
-      showCallHierarchy,
+      (): void => {
+        showCallHierarchy();
+      },
     ),
     vscode.commands.registerCommand(
       "enhanced-references.showOutgoingCalls",
-      (item: CallItem | unknown) =>
-        setCallsDirection(CallsDirection.Outgoing, item),
+      (item: CallItem | unknown): void => {
+        setCallsDirection(CallsDirection.Outgoing, item);
+      },
     ),
     vscode.commands.registerCommand(
       "enhanced-references.showIncomingCalls",
-      (item: CallItem | unknown) =>
-        setCallsDirection(CallsDirection.Incoming, item),
+      (item: CallItem | unknown): void => {
+        setCallsDirection(CallsDirection.Incoming, item);
+      },
     ),
     vscode.commands.registerCommand(
       "enhanced-references.removeCallItem",
-      removeCallItem,
+      (item: CallItem): void => {
+        removeCallItem(item);
+      },
     ),
   );
-}
+};
 
-function removeCallItem(item: CallItem | unknown): void {
-  if (item instanceof CallItem) {
-    item.remove();
-  }
-}
+type CallHierarchyMode = "showIncoming" | "showOutgoing";
 
 class RichCallsDirection {
-  private static _key = "enhanced-references.callHierarchyMode";
+  private static key: string = "enhanced-references.callHierarchyMode";
 
-  private _ctxMode = new ContextKey<"showIncoming" | "showOutgoing">(
-    "enhanced-references.callHierarchyMode",
-  );
+  private callHierarchyMode: ContextKey<CallHierarchyMode> =
+    new ContextKey<CallHierarchyMode>("enhanced-references.callHierarchyMode");
 
-  constructor(
-    private _mem: vscode.Memento,
-    private _value: CallsDirection = CallsDirection.Outgoing,
-  ) {
-    const raw = _mem.get<number>(RichCallsDirection._key);
-    if (typeof raw === "number" && raw >= 0 && raw <= 1) {
-      this.value = raw;
-    } else {
-      this.value = _value;
-    }
+  public get value(): CallsDirection {
+    return this.callsDirection;
   }
-
-  get value() {
-    return this._value;
-  }
-
-  set value(value: CallsDirection) {
-    this._value = value;
-    this._ctxMode.set(
-      this._value === CallsDirection.Incoming ? "showIncoming" : "showOutgoing",
+  public set value(value: CallsDirection) {
+    this.callsDirection = value;
+    this.callHierarchyMode.set(
+      this.callsDirection === CallsDirection.Incoming
+        ? "showIncoming"
+        : "showOutgoing",
     );
-    this._mem.update(RichCallsDirection._key, value);
+    this.memento.update(RichCallsDirection.key, value);
+  }
+
+  public constructor(
+    private memento: vscode.Memento,
+    private callsDirection: CallsDirection = CallsDirection.Outgoing,
+  ) {
+    const rawCallsDirectionValue: number | undefined = memento.get(
+      RichCallsDirection.key,
+    );
+
+    if (
+      typeof rawCallsDirectionValue === "number" &&
+      rawCallsDirectionValue >= 0 &&
+      rawCallsDirectionValue <= 1
+    ) {
+      this.value = rawCallsDirectionValue;
+    } else {
+      this.value = callsDirection;
+    }
   }
 }

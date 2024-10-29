@@ -3,86 +3,98 @@ import { SymbolItemNavigation } from "./enhanced-references";
 import { ContextKey } from "./utils";
 
 export class Navigation {
-  private readonly _disposables: vscode.Disposable[] = [];
-  private readonly _ctxCanNavigate = new ContextKey<boolean>(
+  private readonly disposables: vscode.Disposable[] = [];
+  private readonly canNavigate: ContextKey<boolean> = new ContextKey<boolean>(
     "enhanced-references.canNavigate",
   );
 
-  private _delegate?: SymbolItemNavigation<unknown>;
+  private delegate?: SymbolItemNavigation<unknown>;
 
-  constructor(private readonly _view: vscode.TreeView<unknown>) {
-    this._disposables.push(
-      vscode.commands.registerCommand("enhanced-references.next", () =>
-        this.next(false),
-      ),
-      vscode.commands.registerCommand("enhanced-references.prev", () =>
-        this.previous(false),
-      ),
+  public constructor(private readonly view: vscode.TreeView<unknown>) {
+    this.disposables.push(
+      vscode.commands.registerCommand("enhanced-references.next", (): void => {
+        this.next(false);
+      }),
+      vscode.commands.registerCommand("enhanced-references.prev", (): void => {
+        this.previous(false);
+      }),
     );
   }
 
-  dispose(): void {
-    vscode.Disposable.from(...this._disposables).dispose();
+  public dispose(): void {
+    vscode.Disposable.from(...this.disposables).dispose();
   }
 
-  update(delegate: SymbolItemNavigation<unknown> | undefined) {
-    this._delegate = delegate;
-    this._ctxCanNavigate.set(Boolean(this._delegate));
+  public update(delegate: SymbolItemNavigation<unknown> | undefined) {
+    this.delegate = delegate;
+    this.canNavigate.set(Boolean(this.delegate));
   }
 
-  private _anchor(): undefined | unknown {
-    if (!this._delegate) {
+  private anchor(): undefined | unknown {
+    if (!this.delegate) {
       return undefined;
     }
-    const [sel] = this._view.selection;
-    if (sel) {
-      return sel;
+
+    const [selection] = this.view.selection;
+
+    if (selection) {
+      return selection;
     }
+
     if (!vscode.window.activeTextEditor) {
       return undefined;
     }
-    return this._delegate.nearest(
+
+    return this.delegate.nearest(
       vscode.window.activeTextEditor.document.uri,
       vscode.window.activeTextEditor.selection.active,
     );
   }
 
-  private _open(loc: vscode.Location, preserveFocus: boolean) {
+  private open(loc: vscode.Location, preserveFocus: boolean): void {
     vscode.commands.executeCommand("vscode.open", loc.uri, {
       selection: new vscode.Selection(loc.range.start, loc.range.start),
       preserveFocus,
     });
   }
 
-  previous(preserveFocus: boolean): void {
-    if (!this._delegate) {
+  public previous(preserveFocus: boolean): void {
+    if (!this.delegate) {
       return;
     }
-    const item = this._anchor();
+
+    const item = this.anchor();
+
     if (!item) {
       return;
     }
-    const newItem = this._delegate.previous(item);
-    const newLocation = this._delegate.location(newItem);
+
+    const newItem = this.delegate.previous(item);
+    const newLocation = this.delegate.location(newItem);
+
     if (newLocation) {
-      this._view.reveal(newItem, { select: true, focus: true });
-      this._open(newLocation, preserveFocus);
+      this.view.reveal(newItem, { select: true, focus: true });
+      this.open(newLocation, preserveFocus);
     }
   }
 
-  next(preserveFocus: boolean): void {
-    if (!this._delegate) {
+  public next(preserveFocus: boolean): void {
+    if (!this.delegate) {
       return;
     }
-    const item = this._anchor();
+
+    const item = this.anchor();
+
     if (!item) {
       return;
     }
-    const newItem = this._delegate.next(item);
-    const newLocation = this._delegate.location(newItem);
+
+    const newItem = this.delegate.next(item);
+    const newLocation = this.delegate.location(newItem);
+
     if (newLocation) {
-      this._view.reveal(newItem, { select: true, focus: true });
-      this._open(newLocation, preserveFocus);
+      this.view.reveal(newItem, { select: true, focus: true });
+      this.open(newLocation, preserveFocus);
     }
   }
 }
